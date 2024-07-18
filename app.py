@@ -1,10 +1,9 @@
-from flask import Flask, render_template, request, redirect, url_for, jsonify
+from flask import Flask, render_template, request, jsonify
 import os
 import subprocess
 import socket
 import threading
 import time
-import requests
 import netifaces
 
 app = Flask(__name__)
