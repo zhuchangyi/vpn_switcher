@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VPN Switcher</title>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+            background-color: #f4f4f4;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        .status {
+            background-color: #e9ecef;
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        .status p {
+            margin: 5px 0;
+        }
+        select, button {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        button {
+            background-color: #007bff;
+            color: #fff;
+            border: none;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #3498db;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-left: 10px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .fade-in {
+            animation: fadeIn 0.5s;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>VPN Switcher</h1>
+
+    <div class="status fade-in">
+        <p>VPN Status: <span id="vpn_status">{{ vpn_status }}</span> <span id="loading" class="loading" style="display: none;"></span></p>
+        <p>Current IP: <span id="current_ip">{{ current_ip }}</span></p>
+    </div>
+
+    <form id="switch_form" method="post">
+        <select name="vpn_type" id="vpn_type" onchange="showConfigs(this.value)">
+            <option value="tcp">TCP</option>
+            <option value="udp">UDP</option>
+        </select>
+
+        <select name="config_tcp" id="config_tcp" style="display: none;">
+            {% for config in tcp_configs %}
+            <option value="{{ config }}">{{ config }}</option>
+            {% endfor %}
+        </select>
+
+        <select name="config_udp" id="config_udp" style="display: none;">
+            {% for config in udp_configs %}
+            <option value="{{ config }}">{{ config }}</option>
+            {% endfor %}
+        </select>
+
+        <input type="hidden" name="config" id="config_hidden">
+        <button type="button" onclick="switchVPN()">Switch VPN</button>
+    </form>
+
+    <button id="vpn_toggle" onclick="toggleVPN()">Turn VPN Off</button>
+</div>
+
+<script>
+    let statusCheckInterval;
+    const MAX_STATUS_CHECKS = 24; // 2分钟 (5秒 * 24)
+    let statusCheckCount = 0;
+
+    function showConfigs(vpnType) {
+        document.getElementById('config_tcp').style.display = vpnType === 'tcp' ? 'block' : 'none';
+        document.getElementById('config_udp').style.display = vpnType === 'udp' ? 'block' : 'none';
+        updateConfigHidden();
+    }
+
+    function updateConfigHidden() {
+        var vpnType = document.getElementById('vpn_type').value;
+        var configHidden = document.getElementById('config_hidden');
+        if (vpnType === 'tcp') {
+            configHidden.value = document.getElementById('config_tcp').value;
+        } else {
+            configHidden.value = document.getElementById('config_udp').value;
+        }
+    }
+
+    document.getElementById('vpn_type').addEventListener('change', updateConfigHidden);
+    document.getElementById('config_tcp').addEventListener('change', updateConfigHidden);
+    document.getElementById('config_udp').addEventListener('change', updateConfigHidden);
+
+    document.addEventListener('DOMContentLoaded', function() {
+        var selectedVpnType = document.getElementById('vpn_type').value;
+        showConfigs(selectedVpnType);
+        updateStatus();
+    });
+
+    function switchVPN() {
+        showLoading();
+        $.ajax({
+            url: '/switch',
+            type: 'POST',
+            data: $('#switch_form').serialize(),
+            success: function(response) {
+                if (response.success) {
+                    startStatusCheck();
+                } else {
+                    alert(response.message);
+                    hideLoading();
+                }
+            },
+            error: function() {
+                alert('Error switching VPN');
+                hideLoading();
+            }
+        });
+    }
+
+    function toggleVPN() {
+        showLoading();
+        $.ajax({
+            url: '/toggle',
+            type: 'POST',
+            success: function(response) {
+                if (response.success) {
+                    startStatusCheck();
+                } else {
+                    alert(response.message);
+                    hideLoading();
+                }
+            },
+            error: function() {
+                alert('Error toggling VPN');
+                hideLoading();
+            }
+        });
+    }
+
+    function updateStatus() {
+        $.ajax({
+            url: '/get_status',
+            type: 'GET',
+            success: function(data) {
+                $('#vpn_status').text(data.vpn_status);
+                $('#current_ip').text(data.current_ip);
+                updateToggleButton(data.vpn_status);
+                
+                if (data.vpn_status !== 'connecting') {
+                    hideLoading();
+                    clearInterval(statusCheckInterval);
+                }
+                
+                if (statusCheckCount >= MAX_STATUS_CHECKS) {
+                    clearInterval(statusCheckInterval);
+                    hideLoading();
+                    if (data.vpn_status === 'connecting') {
+                        alert('VPN connection is taking longer than expected. Please check your network connection and try again.');
+                    }
+                }
+            },
+            error: function() {
+                alert('Error fetching status');
+                hideLoading();
+                clearInterval(statusCheckInterval);
+            }
+        });
+    }
+
+    function startStatusCheck() {
+        statusCheckCount = 0;
+        clearInterval(statusCheckInterval);
+        statusCheckInterval = setInterval(function() {
+            updateStatus();
+            statusCheckCount++;
+        }, 5000);
+    }
+
+    function updateToggleButton(status) {
+        var button = $('#vpn_toggle');
+        if (status === 'on') {
+            button.text('Turn VPN Off').prop('disabled', false);
+        } else if (status === 'off') {
+            button.text('Turn VPN On').prop('disabled', false);
+        } else {
+            button.prop('disabled', true);
+        }
+    }
+
+    function showLoading() {
+        $('#loading').show();
+        $('#vpn_toggle').prop('disabled', true);
+    }
+
+    function hideLoading() {
+        $('#loading').hide();
+        $('#vpn_toggle').prop('disabled', false);
+    }
+</script>
+</body>
+</html>
