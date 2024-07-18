@@ -61,7 +61,10 @@ for dir in "${directories[@]}"; do
                 fi
                 # 将本地子网和默认网关添加到路由
                 if ! grep -q "route $local_subnet net_gateway" "$file"; then
-                    echo "route $local_subnet $default_gateway" >> "$file"
+                    # 提取本地子网和掩码
+                    subnet=$(echo "$local_subnet" | cut -d'/' -f1)
+                    netmask=$(ipcalc -m "$local_subnet" | cut -d'=' -f2)
+                    echo "route $subnet $netmask $default_gateway" >> "$file"
                 fi
                 echo "已更新文件: $file"
             else
@@ -111,4 +114,3 @@ if ! sudo FLASK_APP=app.py flask run --host=0.0.0.0 --port=5000; then
     echo "Error: Failed to start the Flask app!"
     exit 1
 fi
-
