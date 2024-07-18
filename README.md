@@ -16,6 +16,8 @@ web控制 Linux 系统上的 网口 连接。它允许用户远程启动、停�
     ```
 2. 安装所需的库：
    ```sh
+   sudo apt update
+   sudo apt install python3-pip
    pip install --no-cache-dir -r requirements.txt
    apt-get update && apt-get install -y openvpn unzip wget curl procps && rm -rf /var/lib/apt/lists/*
     ```
