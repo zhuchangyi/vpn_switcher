@@ -78,7 +78,7 @@ done
 echo "所有文件处理完毕。"
 
 # 复制credentials文件到 /etc/openvpn
-if ! cp /app/credentials.txt /etc/openvpn/credentials.txt; then
+if ! cp credentials.txt /etc/openvpn/credentials.txt; then
     echo "Error: Failed to copy credentials.txt to /etc/openvpn!"
     exit 1
 fi
