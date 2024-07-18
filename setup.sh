@@ -38,12 +38,20 @@ if [ -z "$default_gateway" ]; then
     exit 1
 fi
 
-# 获取本地网络的子网和子网掩码
-local_subnet=$(ip -o -f inet addr show | awk '/scope global/ {print $4}')
+# 获取本地网络的子网
+local_subnet=$(ip -o -f inet addr show | awk '/scope global/ {print $4}' | head -n1)
 if [ -z "$local_subnet" ]; then
     echo "Error: Unable to find the local subnet!"
     exit 1
 fi
+
+# 生成 route 命令
+route_command="route ${local_subnet%/*} 255.255.255.255 $default_gateway"
+
+# 输出需要添加的内容并清理多余行
+echo "Generated route command:"
+route_command_cleaned=$(echo "$route_command" | awk 'NR==1')
+echo "$route_command_cleaned"
 
 # 定义要遍历的目录
 directories=("/etc/openvpn/tcp" "/etc/openvpn/udp")
@@ -55,30 +63,47 @@ for dir in "${directories[@]}"; do
         for file in "$dir"/*.ovpn; do
             # 检查文件是否存在
             if [[ -f "$file" ]]; then
-                # 检查并添加 route-nopull 和 route 指令
-                if ! grep -q "route-nopull" "$file"; then
+                echo "Processing file: $file"
+                
+                # 删除现有的 'route' 行
+                sed -i "/^route .* 255.255.255.255 $default_gateway$/d" "$file"
+
+                # 添加新的路由命令
+                echo "$route_command_cleaned" >> "$file"
+
+                # 删除多余的 'route' 行，只保留最后一行
+                awk '!/^route / || !x++' "$file" > temp && mv temp "$file"
+
+                # 确保文件中没有多余的内容
+                # 删除所有单独一行的 default_gateway
+                sed -i "/^$default_gateway$/d" "$file"
+
+                # 更新 auth-user-pass 行
+                CREDENTIALS_LINE="auth-user-pass /etc/openvpn/credentials.txt"
+                if grep -q "^auth-user-pass" "$file"; then
+                    sed -i "s|^auth-user-pass.*|$CREDENTIALS_LINE|" "$file"
+                else
+                    echo "$CREDENTIALS_LINE" >> "$file"
+                fi
+
+                # 添加 route-nopull 行
+                if ! grep -q "^route-nopull" "$file"; then
                     echo "route-nopull" >> "$file"
                 fi
-                # 将本地子网和默认网关添加到路由
-                if ! grep -q "route $local_subnet net_gateway" "$file"; then
-                    # 提取本地子网和掩码
-                    subnet=$(echo "$local_subnet" | cut -d'/' -f1)
-                    netmask=$(ipcalc -m "$local_subnet" | cut -d'=' -f2)
-                    echo "route $subnet $netmask $default_gateway" >> "$file"
-                fi
-                echo "已更新文件: $file"
+                
+                echo "Updated file: $file"
             else
-                echo "文件不存在: $file"
+                echo "File not found: $file"
                 exit 1
             fi
         done
     else
-        echo "目录不存在: $dir"
+        echo "Directory not found: $dir"
         exit 1
     fi
 done
 
-echo "所有文件处理完毕。"
+echo "All files processed."
 
 # 复制credentials文件到 /etc/openvpn
 if ! cp credentials.txt /etc/openvpn/credentials.txt; then
@@ -86,28 +111,6 @@ if ! cp credentials.txt /etc/openvpn/credentials.txt; then
     exit 1
 fi
 chmod 600 /etc/openvpn/credentials.txt
-
-# 更新所有 .ovpn 文件以使用凭证文件
-CREDENTIALS_LINE="auth-user-pass /etc/openvpn/credentials.txt"
-
-for dir in /etc/openvpn/tcp /etc/openvpn/udp; do
-    if [ -d "$dir" ]; then
-        for ovpn_file in "$dir"/*.ovpn; do
-            if grep -q "auth-user-pass" "$ovpn_file"; then
-                # 替换现有的auth-user-pass行
-                echo "Replacing credentials line in $ovpn_file"
-                sed -i "s|auth-user-pass.*|$CREDENTIALS_LINE|" "$ovpn_file"
-            else
-                # 如果auth-user-pass行不存在，则添加
-                echo "Adding credentials line to $ovpn_file"
-                echo "$CREDENTIALS_LINE" >> "$ovpn_file"
-            fi
-        done
-    else
-        echo "目录不存在: $dir"
-        exit 1
-    fi
-done
 
 # 启动Flask应用程序
 if ! sudo FLASK_APP=app.py flask run --host=0.0.0.0 --port=5000; then
