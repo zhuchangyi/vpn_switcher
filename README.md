@@ -20,13 +20,13 @@ web控制 Linux 系统上的 网口 连接。它允许用户远程启动、停�
    sudo apt install python3-pip
    pip install --no-cache-dir -r requirements.txt
    apt-get update && apt-get install -y openvpn unzip wget curl procps && rm -rf /var/lib/apt/lists/*
-    ```
+   ```
 3. 安装网口配置文件 这里用的配置来源于[Namecheap](https://www.namecheap.com/vpn/vpn-for-linux/)，没有aff 💔
    ```sh
    wget -O /etc/openvpn/groupedServerList.zip https://vpn.ncapi.io/groupedServerList.zip && \ 
    unzip /etc/openvpn/groupedServerList.zip -d /etc/openvpn && \
    rm /etc/openvpn/groupedServerList.zip && \
-   ```sh
+   ```
 4. 运行
    ```sh
    chmod + x setup.sh
