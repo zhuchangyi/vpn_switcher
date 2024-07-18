@@ -23,9 +23,9 @@ web控制 Linux 系统上的 网口 连接。它允许用户远程启动、停�
    ```
 3. 安装网口配置文件 这里用的配置来源于[Namecheap](https://www.namecheap.com/vpn/vpn-for-linux/)，没有aff 💔
    ```sh
-   wget -O /etc/openvpn/groupedServerList.zip https://vpn.ncapi.io/groupedServerList.zip && \ 
-   unzip /etc/openvpn/groupedServerList.zip -d /etc/openvpn && \
-   rm /etc/openvpn/groupedServerList.zip && \
+   wget -O /etc/openvpn/groupedServerList.zip https://vpn.ncapi.io/groupedServerList.zip 
+   unzip /etc/openvpn/groupedServerList.zip -d /etc/openvpn 
+   rm /etc/openvpn/groupedServerList.zip 
    ```
 4. 运行
    ```sh
